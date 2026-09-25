@@ -277,6 +277,26 @@
     .line 121
     invoke-virtual {v7, v1}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z
 
+    new-instance v1, Lcom/mycompany/app/view/MyPopupAdapter$PopMenuItem;
+
+    const/4 v2, 0x7
+
+    sget v3, Lnet/kaki87/soul2/testing/R$string;->select_all:I
+
+    invoke-direct {v1, v2, v3}, Lcom/mycompany/app/view/MyPopupAdapter$PopMenuItem;-><init>(II)V
+
+    invoke-virtual {v7, v1}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z
+
+    new-instance v1, Lcom/mycompany/app/view/MyPopupAdapter$PopMenuItem;
+
+    const/4 v2, 0x8
+
+    sget v3, Lnet/kaki87/soul2/testing/R$string;->delete_all:I
+
+    invoke-direct {v1, v2, v3}, Lcom/mycompany/app/view/MyPopupAdapter$PopMenuItem;-><init>(II)V
+
+    invoke-virtual {v7, v1}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z
+
     .line 122
     .line 123
     .line 124

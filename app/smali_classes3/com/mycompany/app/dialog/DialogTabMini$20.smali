@@ -596,6 +596,35 @@
     .line 258
     return v0
 
+    :pswitch_7
+    iget-boolean v4, v2, Lcom/mycompany/app/dialog/DialogTabMini;->h0:Z
+
+    invoke-virtual {v2, v4}, Lcom/mycompany/app/dialog/DialogTabMini;->G(Z)Lcom/mycompany/app/web/WebTabAdapter;
+
+    move-result-object v4
+
+    if-eqz v4, :cond_d
+
+    iget-boolean v5, v4, Lcom/mycompany/app/web/WebTabAdapter;->u:Z
+
+    if-nez v5, :cond_d
+
+    const/4 v5, 0x0
+
+    invoke-virtual {v4, v5, v3}, Lcom/mycompany/app/web/WebTabAdapter;->Y(IZ)V
+
+    invoke-virtual {v2}, Lcom/mycompany/app/dialog/DialogTabMini;->Z()V
+
+    :cond_d
+    return v3
+
+    :pswitch_8
+    const/4 v4, 0x0
+
+    invoke-static {v2, v4}, Lcom/mycompany/app/dialog/DialogTabMini;->F(Lcom/mycompany/app/dialog/DialogTabMini;Lcom/mycompany/app/web/WebTabAdapter$WebTabItem;)V
+
+    return v3
+
     .line 259
     :pswitch_data_0
     .packed-switch 0x0
@@ -606,5 +635,7 @@
         :pswitch_2
         :pswitch_1
         :pswitch_0
+        :pswitch_7
+        :pswitch_8
     .end packed-switch
 .end method
