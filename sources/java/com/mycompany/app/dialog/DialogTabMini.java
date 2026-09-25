@@ -2350,6 +2350,8 @@ public class DialogTabMini extends MyDialogBottom {
                                                 arrayList.add(new MyPopupAdapter.PopMenuItem(4, R.string.swipe_delete, 0, PrefZone.E));
                                                 arrayList.add(new MyPopupAdapter.PopMenuItem(5, R.string.undelete));
                                                 arrayList.add(new MyPopupAdapter.PopMenuItem(6, R.string.search_url));
+                                                arrayList.add(new MyPopupAdapter.PopMenuItem(7, R.string.select));
+                                                arrayList.add(new MyPopupAdapter.PopMenuItem(8, R.string.close_all));
                                                 MyPopupMenu myPopupMenu = new MyPopupMenu(dialogTabMini3.a0, dialogTabMini3.k0, view, arrayList, MainApp.K1, new MyPopupMenu.MyPopupListener() { // from class: com.mycompany.app.dialog.DialogTabMini.20
                                                     @Override // com.mycompany.app.view.MyPopupMenu.MyPopupListener
                                                     public final void a() {
@@ -2460,6 +2462,16 @@ public class DialogTabMini extends MyDialogBottom {
                                                                     });
                                                                     return true;
                                                                 }
+                                                                return true;
+                                                            case 7:
+                                                                WebTabAdapter G7 = dialogTabMini4.G(dialogTabMini4.h0);
+                                                                if (G7 != null && !G7.u) {
+                                                                    G7.Y(0, true);
+                                                                    dialogTabMini4.Z();
+                                                                }
+                                                                return true;
+                                                            case 8:
+                                                                DialogTabMini.F(dialogTabMini4, null);
                                                                 return true;
                                                             case 6:
                                                                 if (dialogTabMini4.c1 == null && (coordinatorLayout = dialogTabMini4.t) != null) {
