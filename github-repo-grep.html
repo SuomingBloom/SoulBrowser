@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GitHub Repo Grep</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --border:#2a2f3a; --text:#e6e8ec;
+    --muted:#9aa3b2; --accent:#5b8cff; --ok:#3ecf8e; --err:#ff5d5d; --warn:#e8b64c;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,Roboto,Segoe UI,Helvetica,Arial,sans-serif;
+    padding:16px; padding-bottom:calc(24px + env(safe-area-inset-bottom,0px));
+    padding-top:calc(16px + env(safe-area-inset-top,0px));
+  }
+  h1{font-size:18px; margin:0 0 4px}
+  .sub{color:var(--muted); font-size:13px; margin-bottom:16px}
+  .card{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:14px}
+  label{display:block; font-size:12px; color:var(--muted); margin:10px 0 4px}
+  input[type=text],input[type=password],textarea{
+    width:100%; padding:10px; border-radius:8px; border:1px solid var(--border);
+    background:#0d0f14; color:var(--text); font-size:14px; font-family:inherit;
+  }
+  textarea{font-family:monospace; min-height:70px; resize:vertical}
+  .row{display:flex; gap:8px}
+  .row > div{flex:1}
+  button{
+    appearance:none; border:none; border-radius:10px; padding:12px 16px;
+    font-size:14px; font-weight:600; cursor:pointer; width:100%;
+  }
+  .btn-primary{background:var(--accent); color:#fff}
+  .btn-secondary{background:#232838; color:var(--text); border:1px solid var(--border)}
+  .toggle{display:flex; align-items:center; gap:8px; margin-top:10px; font-size:13px; color:var(--text)}
+  .toggle input{width:auto}
+  #log{
+    background:#0a0c10; border:1px solid var(--border); border-radius:8px;
+    padding:10px; font-family:monospace; font-size:12px; white-space:pre-wrap;
+    max-height:220px; overflow-y:auto; overflow-x:auto;
+  }
+  .line-ok{color:var(--ok)}
+  .line-err{color:var(--err)}
+  .line-warn{color:var(--warn)}
+  .line-muted{color:var(--muted)}
+  .footer-note{font-size:11px; color:var(--muted); margin-top:6px}
+  .result{border:1px solid var(--border); border-radius:10px; padding:10px; margin-bottom:10px; background:#12151c}
+  .result .path{color:var(--accent); font-size:13px; font-family:monospace; word-break:break-all; margin-bottom:6px}
+  .result .snippet{
+    background:#0a0c10; border-radius:6px; padding:8px; font-family:monospace;
+    font-size:12px; overflow-x:auto; white-space:pre;
+  }
+  .result .snippet .hit{background:#3a2f12; color:var(--warn)}
+  .result .snippet .lineno{color:var(--muted); user-select:none; margin-right:8px}
+  .copybtn{margin-top:8px; background:#232838; color:var(--text); border:1px solid var(--border); font-size:12px; padding:8px 10px; width:auto}
+  .summary{font-size:13px; color:var(--muted); margin-bottom:10px}
+</style>
+</head>
+<body>
+
+<h1>GitHub Repo Grep</h1>
+<div class="sub">Cari string di semua file repo (misal file .smali) langsung dari HP, tanpa clone.</div>
+
+<div class="card">
+  <label>GitHub Personal Access Token</label>
+  <input type="password" id="token" placeholder="ghp_... atau github_pat_...">
+  <div class="footer-note">Token tidak dikirim ke mana pun selain api.github.com. Cuma perlu scope baca (read) kalau repo publik, atau "repo" kalau privat.</div>
+
+  <div class="row">
+    <div>
+      <label>Owner</label>
+      <input type="text" id="owner" placeholder="username-github">
+    </div>
+    <div>
+      <label>Repo</label>
+      <input type="text" id="repo" placeholder="soulbrowser">
+    </div>
+  </div>
+
+  <label>Branch</label>
+  <input type="text" id="branch" value="main">
+</div>
+
+<div class="card">
+  <label>Cari teks (satu per baris, semua harus cocok / AND)</label>
+  <textarea id="query" placeholder="search_url">search_url</textarea>
+
+  <label>Path harus mengandung (opsional, pisah koma untuk beberapa filter — OR)</label>
+  <input type="text" id="pathFilter" value="dialog" placeholder="dialog,tab">
+
+  <label>Ekstensi file (pisah koma)</label>
+  <input type="text" id="extFilter" value="smali,java">
+
+  <div class="toggle">
+    <input type="checkbox" id="caseSensitive">
+    <span>Case sensitive</span>
+  </div>
+
+  <div class="row" style="margin-top:12px">
+    <div><button class="btn-secondary" id="btnScanTree">1. Pindai Struktur Repo</button></div>
+  </div>
+  <div class="footer-note" id="treeSummary"></div>
+
+  <div class="row" style="margin-top:8px">
+    <div><button class="btn-primary" id="btnSearch">2. Cari di File yang Cocok</button></div>
+  </div>
+</div>
+
+<div class="card">
+  <strong>Log</strong>
+  <div id="log" style="margin-top:8px">Belum ada aktivitas.</div>
+</div>
+
+<div id="results"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const logEl = $("log");
+let TREE_FILES = []; // {path, sha, size}
+
+function log(msg, cls) {
+  const div = document.createElement("div");
+  if (cls) div.className = cls;
+  div.textContent = msg;
+  if (logEl.textContent === "Belum ada aktivitas.") logEl.textContent = "";
+  logEl.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function clearLog(){ logEl.textContent = ""; }
+
+function ghHeaders(token) {
+  return {
+    "Authorization": "Bearer " + token,
+    "Accept": "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28"
+  };
+}
+async function apiGet(url, token) {
+  let res;
+  try {
+    res = await fetch(url, { headers: ghHeaders(token) });
+  } catch (netErr) {
+    throw new Error(`Gagal konek ke ${url} (jaringan/CORS diblokir?): ${netErr.message}`);
+  }
+
+  const rawText = await res.text();
+  let data;
+  try {
+    data = rawText ? JSON.parse(rawText) : {};
+  } catch (parseErr) {
+    throw new Error(
+      `GET ${url} -> status ${res.status}, tapi body BUKAN JSON valid. ` +
+      `Kemungkinan diblokir proxy/CSP di browser. Cuplikan body: ${rawText.slice(0, 200)}`
+    );
+  }
+
+  if (res.status === 403) {
+    const remaining = res.headers.get("x-ratelimit-remaining");
+    throw new Error(`403 dari GitHub (kemungkinan rate limit, sisa kuota: ${remaining}). Pesan: ${data.message || "-"}`);
+  }
+  if (res.status === 401) {
+    throw new Error(`401 Unauthorized — token salah/kedaluwarsa. Pesan: ${data.message || "-"}`);
+  }
+  if (res.status === 404) {
+    throw new Error(`404 Not Found untuk ${url} — cek owner/repo/branch/sha. Pesan: ${data.message || "-"}`);
+  }
+  if (!res.ok) {
+    throw new Error(`GET ${url} -> status ${res.status}. Pesan: ${data.message || JSON.stringify(data).slice(0,200)}`);
+  }
+  return data;
+}
+function b64ToUtf8(b64) {
+  const bin = atob(b64.replace(/\n/g, ""));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder("utf-8").decode(bytes);
+}
+
+function getConfig() {
+  const token = $("token").value.trim();
+  const owner = $("owner").value.trim();
+  const repo = $("repo").value.trim();
+  const branch = $("branch").value.trim() || "main";
+  if (!token || !owner || !repo) throw new Error("Isi token, owner, dan repo dulu.");
+  return { token, owner, repo, branch };
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+$("btnScanTree").onclick = async () => {
+  clearLog();
+  $("results").innerHTML = "";
+  TREE_FILES = [];
+  try {
+    const { token, owner, repo, branch } = getConfig();
+    log(`Mengambil daftar branch ${branch}...`, "line-muted");
+    const ref = await apiGet(`https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${branch}`, token);
+    if (Array.isArray(ref)) {
+      throw new Error(`Nama branch "${branch}" cocok lebih dari satu ref di GitHub (GitHub balikin array, bukan objek tunggal). Pastikan nama branch persis, bukan sekadar awalan dari branch lain.`);
+    }
+    if (!ref || !ref.object || !ref.object.sha) {
+      throw new Error(`Respons ref tidak berbentuk seperti dugaan: ${JSON.stringify(ref).slice(0,200)}`);
+    }
+    const commitSha = ref.object.sha;
+    log(`Branch ditemukan, commit: ${commitSha.substring(0,7)}`, "line-ok");
+
+    log(`Mengambil struktur pohon repo (recursive)...`, "line-muted");
+    const tree = await apiGet(`https://api.github.com/repos/${owner}/${repo}/git/trees/${commitSha}?recursive=1`, token);
+    if (!tree || !Array.isArray(tree.tree)) {
+      throw new Error(`Respons tree tidak berbentuk seperti dugaan (tidak ada field "tree" berupa array): ${JSON.stringify(tree).slice(0,300)}`);
+    }
+    if (tree.truncated) {
+      log("PERINGATAN: repo terlalu besar, hasil tree GitHub dipotong (truncated). Sebagian file mungkin tidak ikut terindeks.", "line-warn");
+    }
+
+    const extFilter = $("extFilter").value.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+    const pathFilter = $("pathFilter").value.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+
+    TREE_FILES = tree.tree.filter(item => {
+      if (item.type !== "blob") return false;
+      const p = item.path.toLowerCase();
+      const extOk = extFilter.length === 0 || extFilter.some(ext => p.endsWith("." + ext));
+      const pathOk = pathFilter.length === 0 || pathFilter.some(f => p.includes(f));
+      return extOk && pathOk;
+    });
+
+    log(`Total file di repo: ${tree.tree.filter(i=>i.type==="blob").length}`, "line-muted");
+    log(`File yang cocok filter (ekstensi + path): ${TREE_FILES.length}`, "line-ok");
+    $("treeSummary").textContent = `${TREE_FILES.length} file siap dicari. Tap "Cari di File yang Cocok" untuk lanjut.`;
+
+    if (TREE_FILES.length > 400) {
+      log(`PERINGATAN: ${TREE_FILES.length} file itu banyak, pencarian bisa lama dan makan rate limit. Persempit path filter kalau bisa.`, "line-warn");
+    }
+  } catch (e) {
+    log("Gagal: " + e.message, "line-err");
+  }
+};
+
+async function fetchBlobText(owner, repo, sha, token) {
+  const data = await apiGet(`https://api.github.com/repos/${owner}/${repo}/git/blobs/${sha}`, token);
+  if (data.encoding !== "base64") throw new Error("Encoding tidak dikenal: " + data.encoding);
+  return b64ToUtf8(data.content);
+}
+
+function buildSnippet(lines, matchLineIdx, contextLines) {
+  const start = Math.max(0, matchLineIdx - contextLines);
+  const end = Math.min(lines.length - 1, matchLineIdx + contextLines);
+  let html = "";
+  for (let i = start; i <= end; i++) {
+    const lineNo = i + 1;
+    const isHit = i === matchLineIdx;
+    const escaped = escapeHtml(lines[i]);
+    html += `<span class="lineno">${String(lineNo).padStart(4," ")}</span>${isHit ? `<span class="hit">${escaped}</span>` : escaped}\n`;
+  }
+  return html;
+}
+
+$("btnSearch").onclick = async () => {
+  try {
+    const { token, owner, repo } = getConfig();
+    if (TREE_FILES.length === 0) {
+      log("Belum ada file terindeks. Tap 'Pindai Struktur Repo' dulu.", "line-err");
+      return;
+    }
+    const rawQueries = $("query").value.split("\n").map(s => s.trim()).filter(Boolean);
+    if (rawQueries.length === 0) {
+      log("Isi teks yang mau dicari dulu.", "line-err");
+      return;
+    }
+    const caseSensitive = $("caseSensitive").checked;
+    const queries = caseSensitive ? rawQueries : rawQueries.map(q => q.toLowerCase());
+
+    $("results").innerHTML = "";
+    clearLog();
+    log(`Mencari "${rawQueries.join('" DAN "')}" di ${TREE_FILES.length} file...`, "line-muted");
+
+    let matchCount = 0;
+    let scanned = 0;
+    const CONCURRENCY = 6;
+    let idx = 0;
+
+    async function worker() {
+      while (idx < TREE_FILES.length) {
+        const file = TREE_FILES[idx++];
+        scanned++;
+        try {
+          const content = await fetchBlobText(owner, repo, file.sha, token);
+          const haystack = caseSensitive ? content : content.toLowerCase();
+          const allMatch = queries.every(q => haystack.includes(q));
+          if (allMatch) {
+            matchCount++;
+            const lines = content.split("\n");
+            const primaryQuery = queries[0];
+            const matchLineIdx = lines.findIndex(l => (caseSensitive ? l : l.toLowerCase()).includes(primaryQuery));
+            const snippetHtml = matchLineIdx >= 0 ? buildSnippet(lines, matchLineIdx, 4) : "(baris tidak ditemukan untuk preview)";
+
+            const div = document.createElement("div");
+            div.className = "result";
+            div.innerHTML = `
+              <div class="path">${escapeHtml(file.path)}</div>
+              <div class="snippet">${snippetHtml}</div>
+              <button class="copybtn" data-path="${escapeHtml(file.path)}">Salin path</button>
+            `;
+            div.querySelector(".copybtn").onclick = (ev) => {
+              navigator.clipboard.writeText(file.path).then(() => {
+                ev.target.textContent = "Tersalin!";
+                setTimeout(() => ev.target.textContent = "Salin path", 1200);
+              });
+            };
+            $("results").appendChild(div);
+            log(`  ✓ ketemu: ${file.path}`, "line-ok");
+          }
+        } catch (e) {
+          log(`  ✗ gagal baca ${file.path}: ${e.message}`, "line-err");
+        }
+        if (scanned % 25 === 0) {
+          log(`  ...${scanned}/${TREE_FILES.length} file diperiksa`, "line-muted");
+        }
+      }
+    }
+
+    const workers = Array.from({ length: Math.min(CONCURRENCY, TREE_FILES.length) }, worker);
+    await Promise.all(workers);
+
+    log(`\nSelesai. ${matchCount} file cocok dari ${TREE_FILES.length} diperiksa.`, matchCount > 0 ? "line-ok" : "line-warn");
+  } catch (e) {
+    log("Gagal: " + e.message, "line-err");
+  }
+};
+</script>
+
+</body>
+</html>
